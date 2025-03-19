@@ -53,10 +53,9 @@ try {
         password VARCHAR(255) NOT NULL,
         location VARCHAR(100),
         availability VARCHAR(50),
-        support_education BOOLEAN DEFAULT FALSE,
-        support_orphans BOOLEAN DEFAULT FALSE,
-        support_elders BOOLEAN DEFAULT FALSE,
-        skills TEXT,
+        aadhar_doc VARCHAR(255),
+        role VARCHAR(20),
+        status VARCHAR(20),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )";
 

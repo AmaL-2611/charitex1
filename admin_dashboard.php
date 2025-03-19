@@ -61,8 +61,7 @@ try {
     $recentActivities = [];
     
     // Get recent donations
-    $donationStmt = $pdo->query("
-        SELECT 
+    $donationStmt = $pdo->query("SELECT 
             'donation' as type,
             d.created_at,
             CONCAT(COALESCE(dn.name, 'Anonymous'), ' donated $', d.amount) as description,
@@ -77,8 +76,7 @@ try {
     $recentActivities = array_merge($recentActivities, $donationStmt->fetchAll(PDO::FETCH_ASSOC));
 
     // Get recent volunteers
-    $volunteerStmt = $pdo->query("
-        SELECT 
+    $volunteerStmt = $pdo->query(" SELECT 
             'volunteer' as type,
             created_at,
             CONCAT(name, ' joined as volunteer') as description,
@@ -91,8 +89,7 @@ try {
     $recentActivities = array_merge($recentActivities, $volunteerStmt->fetchAll(PDO::FETCH_ASSOC));
 
     // Get recent events
-    $eventStmt = $pdo->query("
-        SELECT 
+    $eventStmt = $pdo->query("SELECT 
             'event' as type,
             created_at,
             CONCAT(title, ' event created') as description,
@@ -113,8 +110,7 @@ try {
     $recentActivities = array_slice($recentActivities, 0, 5);
 
     // Fetch all funding requests with orphanage details
-    $funding_stmt = $pdo->query("
-        SELECT 
+    $funding_stmt = $pdo->query("SELECT 
             fr.*,
             o.name as orphanage_name,
             o.email as orphanage_email,
@@ -281,7 +277,6 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
                         </a>
                     </li>
                 </ul>
-              
             </div>
 
             <!-- Main Content -->
@@ -504,12 +499,129 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
                             </div>
                         </div>
                     </section>
+
+                    <!-- Add this section in the main content area -->
+                    <section id="volunteer-requests" class="mt-5">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h3 class="mb-0">Volunteer Verification Requests</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Email</th>
+                                                <th>Phone</th>
+                                                <th>Submission Date</th>
+                                                <th>Verification Form</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php
+                                            $sql = "SELECT * FROM volunteer_verifications WHERE status='pending' ORDER BY submission_date DESC";
+                                            $result = $pdo->query($sql);
+                                            
+                                            while($row = $result->fetch(PDO::FETCH_ASSOC)) {
+                                                echo "<tr>";
+                                                
+                                                echo "<td>".$row['email']."</td>";
+                                               
+                                                echo "<td>".date('d M Y H:i', strtotime($row['submission_date']))."</td>";
+                                                echo "<td>
+                                                        <a href='".$row['document_path']."' class='btn btn-sm btn-primary' download>
+                                                            <i class='fas fa-download'></i> Download Form
+                                                        </a>
+                                                        <button type='button' class='btn btn-sm btn-info ms-1' 
+                                                                onclick='viewDocument(\"".$row['document_path']."\")'>
+                                                            <i class='fas fa-eye'></i> View
+                                                        </button>
+                                                      </td>";
+                                                echo "<td>
+                                                        <button type='button' class='btn btn-sm btn-success' 
+                                                                data-bs-toggle='modal' 
+                                                                data-bs-target='#approveModal".$row['id']."'>
+                                                            <i class='fas fa-check'></i> Approve
+                                                        </button>
+                                                        <button type='button' class='btn btn-sm btn-danger ms-1' 
+                                                                onclick='rejectVolunteer(".$row['id'].")'>
+                                                            <i class='fas fa-times'></i> Reject
+                                                        </button>
+                                                      </td>";
+                                                echo "</tr>";
+                                            }
+                                            
+                                            if ($result->rowCount() == 0) {
+                                                echo "<tr><td colspan='6' class='text-center'>No pending verification requests</td></tr>";
+                                            }
+                                            ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </main>
         </div>
     </div>
 
+    <!-- Approval Modals -->
+    <?php
+    $sql = "SELECT * FROM volunteer_verifications WHERE status='pending'";
+    $result = $pdo->query($sql);
+    
+    while($row = $result->fetch(PDO::FETCH_ASSOC)) 
+    {
+        echo "<div class='modal fade' id='approveModal".$row['id']."' tabindex='-1'>
+                <div class='modal-dialog'>
+                    <div class='modal-content'>
+                        <div class='modal-header'>
+                            <h5 class='modal-title'>Generate Verification Code</h5>
+                            <button type='button' class='btn-close' data-bs-dismiss='modal'></button>
+                        </div>
+                        <div class='modal-body'>
+                            <form id='approvalForm".$row['id']."'>
+                                <div class='mb-3'>
+                                    <label for='verification_code' class='form-label'>Enter Verification Code</label>
+                                    <input type='text' class='form-control' name='verification_code' required 
+                                           placeholder='Enter code to send to volunteer'>
+                                </div>
+                                <input type='hidden' name='volunteer_id' value='".$row['id']."'>
+                                <input type='hidden' name='volunteer_email' value='".$row['email']."'>
+                            </form>
+                        </div>
+                        <div class='modal-footer'>
+                            <button type='button' class='btn btn-secondary' data-bs-dismiss='modal'>Close</button>
+                            <button type='button' class='btn btn-primary' onclick='approveWithCode(".$row['id'].");'>
+                                Approve & Send Code
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>";
+    }
+    ?>
+
+    <!-- Document Preview Modal -->
+    <div class="modal fade" id="documentPreviewModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Document Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <iframe id="documentFrame" style="width: 100%; height: 500px;" frameborder="0"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
     function viewRequestDetails(requestId) {
         // Fetch request details
@@ -577,6 +689,78 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
             default: return 'secondary';
         }
     }
+
+    function approveWithCode(id) {
+        console.log('approveWithCode called with id:', id); // Debug log
+        
+        const form = document.getElementById('approvalForm' + id);
+        const codeInput = form.querySelector('input[name="verification_code"]');
+        
+        if (!codeInput.value.trim()) {
+            alert('Please enter a verification code');
+            return;
+        }
+        
+        const formData = new FormData(form);
+        
+        // Debug log
+        console.log('Form data:');
+        for (let pair of formData.entries()) {
+            console.log(pair[0] + ': ' + pair[1]);
+        }
+        
+        $.ajax({
+            url: 'approve_volunteer.php',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            beforeSend: function() {
+                console.log('Sending AJAX request...'); // Debug log
+            },
+            success: function(response) {
+                console.log('Response received:', response); // Debug log
+                
+                if(response.includes('success')) {
+                    alert('Verification code has been sent successfully!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + response);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX Error:', error);
+                console.error('Status:', status);
+                console.error('Response:', xhr.responseText);
+                alert('Error occurred while processing the request.');
+            }
+        });
+    }
+
+    function rejectVolunteer(id) {
+        if(confirm('Are you sure you want to reject this volunteer?')) {
+            $.ajax({
+                url: 'reject_volunteer.php',
+                type: 'POST',
+                data: { id: id },
+                success: function(response) {
+                    alert('Volunteer rejected');
+                    location.reload();
+                }
+            });
+        }
+    }
+
+    function viewDocument(path) {
+        const frame = document.getElementById('documentFrame');
+        frame.src = path;
+        new bootstrap.Modal(document.getElementById('documentPreviewModal')).show();
+    }
+
+    // Add this to check if jQuery is loaded
+    $(document).ready(function() {
+        console.log('jQuery is loaded and document is ready');
+    });
     </script>
 </body>
 </html>

@@ -1,10 +1,32 @@
 <?php
 session_start();
-require_once 'connect.php';
+include 'connect.php';
 
 $signup_errors = [];
 
+if (isset($_POST['check_volunteer_code'])) {
+    try {
+        $code = trim($_POST['check_volunteer_code']);
+        $check_used_stmt = $pdo->prepare("SELECT volunteer_id FROM volunteers WHERE volunteer_id = ?");
+        $check_used_stmt->execute([$code]);
+        
+        if ($check_used_stmt->fetch()) {
+            echo 'exists';
+        }
+    } catch (PDOException $e) {
+        error_log("Volunteer code check error: " . $e->getMessage());
+    }
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Debug point 1: Check if form is being submitted
+    error_log("Form submitted");
+    
+    // Debug point 2: Check POST data
+    error_log("POST data: " . print_r($_POST, true));
+    error_log("FILES data: " . print_r($_FILES, true));
+
     // Sanitize and validate inputs
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
@@ -13,7 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirm_password = $_POST['confirm_password'] ?? '';
     $location = trim($_POST['location'] ?? '');
     $availability = $_POST['availability'] ?? '';
-    $aadhar = $_FILES['aadhar'] ?? '';
+    $volunteer_code = trim($_POST['volunteer_code'] ?? '');
+    
+    // Debug point 3: Check sanitized variables
+    error_log("Sanitized data: " . print_r([
+        'name' => $name,
+        'email' => $email,
+        'mobile' => $mobile,
+        'location' => $location,
+        'availability' => $availability
+    ], true));
 
     // Validate inputs
     if (empty($name)) {
@@ -22,6 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $signup_errors[] = "Valid email is required";
+    }
+
+    if (empty($mobile)) {
+        $signup_errors[] = "Mobile number is required";
     }
 
     if (empty($password)) {
@@ -54,26 +89,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Handle file upload
-    if (empty($signup_errors) && isset($_FILES['aadhar'])) {
-        $upload_dir = 'uploads/aadhar/';
-        if (!file_exists($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
-        }
+    // Add validation for volunteer code
+    if (empty($volunteer_code)) {
+        $signup_errors[] = "Volunteer ID is required";
+    } else {
+        try {
+            // First check if code exists in volunteer_verifications
+            $check_code_stmt = $pdo->prepare("SELECT verification_code FROM volunteer_verifications WHERE verification_code = ?");
+            $check_code_stmt->execute([$volunteer_code]);
+            $code_data = $check_code_stmt->fetch();
 
-        $file_extension = strtolower(pathinfo($_FILES['aadhar']['name'], PATHINFO_EXTENSION));
-        $new_filename = uniqid() . '.' . $file_extension;
-        $target_file = $upload_dir . $new_filename;
-
-        if (!move_uploaded_file($_FILES['aadhar']['tmp_name'], $target_file)) {
-            $signup_errors[] = "Failed to upload Aadhar document";
+            if (!$code_data) {
+                $signup_errors[] = "Wrong Volunteer ID";
+                error_log("Wrong Volunteer ID attempted: " . $volunteer_code);
+            } else {
+                // If code exists, check if it's already used in volunteers table
+                $check_used_stmt = $pdo->prepare("SELECT volunteer_id FROM volunteers WHERE volunteer_id = ?");
+                $check_used_stmt->execute([$volunteer_code]);
+                
+                if ($check_used_stmt->fetch()) {
+                    $signup_errors[] = "This Volunteer ID is already registered";
+                    error_log("Already used Volunteer ID attempted: " . $volunteer_code);
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("Code verification error: " . $e->getMessage());
+            $signup_errors[] = "Error verifying Volunteer ID";
         }
     }
 
     // If no errors, create account
     if (empty($signup_errors)) {
         try {
-            // First, store the file
+            // Debug point 1: Before file upload
+            error_log("Starting file upload process");
+
+            // Handle file upload
             $upload_dir = 'uploads/aadhar/';
             if (!file_exists($upload_dir)) {
                 mkdir($upload_dir, 0777, true);
@@ -87,42 +138,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Failed to upload Aadhar document");
             }
 
-            // Then create the account
-            $stmt = $pdo->prepare(" INSERT INTO volunteers (
-                    name, 
-                    email, 
-                    mobile, 
-                    password, 
-                    location, 
-                    availability, 
-                    aadhar, 
-                    role, 
-                    status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'volunteer', 'pending')
-            ");
-            
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            $result = $stmt->execute([
-                $name,
-                $email,
-                $mobile,
-                $hashed_password,
-                $location,
-                $availability,
-                $target_file
-            ]);
+            
+            // Debug point 2: Check all values before insert
+            error_log("Values to be inserted: " . print_r([
+                'name' => $name,
+                'email' => $email,
+                'mobile' => $mobile,
+                'location' => $location,
+                'availability' => $availability,
+                'aadhar_file' => $target_file,
+                'volunteer_id' => $volunteer_code
+            ], true));
 
+            // Modify column name from aadhar_file to match your database
+            $sql = "INSERT INTO volunteers (
+                name, 
+                email, 
+                mobile, 
+                password, 
+                location, 
+                availability, 
+                aadhar_file,  /* Make sure this column name matches your database */
+                role, 
+                status,
+                volunteer_id
+            ) VALUES (
+                :name, 
+                :email, 
+                :mobile, 
+                :password, 
+                :location, 
+                :availability, 
+                :aadhar_file, 
+                'volunteer', 
+                'pending',
+                :volunteer_id
+            )";
+            
+            $stmt = $pdo->prepare($sql);
+            
+            // Use named parameters
+            $params = [
+                ':name' => $name,
+                ':email' => $email,
+                ':mobile' => $mobile,
+                ':password' => $hashed_password,
+                ':location' => $location,
+                ':availability' => $availability,
+                ':aadhar_file' => $target_file,
+                ':volunteer_id' => $volunteer_code
+            ];
+
+            // Debug point 3: Log SQL and parameters
+            error_log("SQL Query: " . $sql);
+            error_log("Parameters: " . print_r($params, true));
+
+            $result = $stmt->execute($params);
+
+            // Debug point 4: Check for errors
+            if (!$result) {
+                error_log("Database Error: " . print_r($stmt->errorInfo(), true));
+                error_log("SQL Error: " . print_r($stmt->errorInfo(), true));
+                error_log("SQL State: " . $stmt->errorCode());
+                throw new Exception("Failed to create account: " . $stmt->errorInfo()[2]);
+            }
+
+            // If successful, update verification code status
             if ($result) {
-                $_SESSION['success_message'] = "Account created successfully! Please wait for admin approval before logging in.";
-                header("Location: login.php");
-                exit();
+                try {
+                    
+                    header("Location: login.php");
+                    exit(); // Make sure to exit after redirect
+                } catch (Exception $e) {
+                    error_log("Redirect error: " . $e->getMessage());
+                }
             } else {
-                throw new Exception("Failed to create account");
+                error_log("Database insertion failed");
+                $signup_errors[] = "Failed to create account";
             }
         } catch (Exception $e) {
-            error_log("Signup Error: " . $e->getMessage());
+            error_log("Error in signup process: " . $e->getMessage());
             $signup_errors[] = "Failed to create account: " . $e->getMessage();
         }
+    } else {
+        // Debug point 9: Check validation errors
+        error_log("Validation errors: " . print_r($signup_errors, true));
     }
 }
 ?>
@@ -262,6 +363,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             padding-left: 1rem;
             display: none;
         }
+        .error-message.show {
+    display: block; /* Show when the class 'show' is added */
+}
 
         .custom-select {
             width: 100%;
@@ -412,6 +516,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
 
         <form id="signupForm" action="<?php echo $_SERVER['PHP_SELF']; ?>" method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <div class="input-icon">
+                    <i class="fas fa-id-card"></i>
+                    <input type="text" 
+                           id="volunteer_code" 
+                           name="volunteer_code" 
+                           placeholder="Enter Volunteer ID received in email" 
+                           required />
+                </div>
+                <div class="error-message" id="volunteer-code-error"></div>
+            </div>
+
             <div class="form-group">
                 <input type="text" id="name" name="name" placeholder="Full name (at least 2 words)" required />
                 <div class="error-message" id="name-error"></div>
@@ -610,16 +726,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return true;
         }
 
+        function validateVolunteerCode(input) {
+            const value = input.value.trim();
+            if (!value) {
+                showValidation(input, "Volunteer ID is required");
+                return false;
+            }
+            return true;
+        }
+
         function showValidation(input, message) {
             const errorElement = document.getElementById(`${input.id}-error`);
             errorElement.textContent = message;
-            errorElement.style.display = "block";
+            errorElement.classList.add("show");
             input.classList.add("error");
         }
 
         function hideValidation(input) {
             const errorElement = document.getElementById(`${input.id}-error`);
-            errorElement.style.display = "none";
+            errorElement.classList.remove("show");
             input.classList.remove("error");
         }
 
@@ -633,6 +758,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!validatePassword(document.getElementById('password'))) isValid = false;
             if (!validateConfirmPassword(document.getElementById('confirm_password'))) isValid = false;
             if (!validateAadhar(document.getElementById('aadhar'))) isValid = false;
+            if (!validateVolunteerCode(document.getElementById('volunteer_code'))) isValid = false;
 
             // Additional validation for volunteer form
             if (document.getElementById('location')) {
@@ -684,6 +810,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             validateAadhar(this);
         });
 
+        document.getElementById('volunteer_code').addEventListener('input', function() {
+            validateVolunteerCode(this);
+        });
+
         // Additional event listeners for volunteer form
         if (document.getElementById('location')) {
             document.getElementById('location').addEventListener('input', function() {
@@ -713,6 +843,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             element.addEventListener('blur', function() {
                 this.classList.remove('input-focus');
+            });
+        });
+
+        // Add this with your other JavaScript validation code
+        document.getElementById('volunteer_code').addEventListener('input', function() {
+            const code = this.value.trim();
+            
+            if (!code) {
+                showValidation(this, "Volunteer ID is required");
+                return;
+            }
+
+            // Check if volunteer ID already exists
+            fetch('volunteer_signup.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'check_volunteer_code=' + encodeURIComponent(code)
+            })
+            .then(response => response.text())
+            .then(data => {
+                if (data === 'exists') {
+                    showValidation(this, "Wrong Volunteer ID");
+                } else {
+                    hideValidation(this);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
             });
         });
     </script>
