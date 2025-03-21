@@ -272,6 +272,11 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="review_beneficiaries.php">
+                            <i class="fas fa-user-check"></i> Review Beneficiaries
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="login.php">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>

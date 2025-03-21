@@ -56,9 +56,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         if ($stmt->execute()) {
             $stmt->close();
-            $_SESSION['success_message'] = "Document uploaded successfully. Please wait for admin approval.";
-            header("Location: volunteer_signup.php");
-            exit();
+            $showThankYou = true;
         } else {
             error_log("Execute failed: " . $stmt->error);
             $stmt->close();
@@ -74,4 +72,141 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 }
 
 $conn->close();
-?> 
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Verification - CHARITEX</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f8f9fa;
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            background: white;
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            text-align: center;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .icon-circle {
+            width: 80px;
+            height: 80px;
+            background: #e8f5e9;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+        }
+
+        .icon-circle i {
+            font-size: 2.5rem;
+            color: #4caf50;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+        }
+
+        .message {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+
+        .btn-custom {
+            background: linear-gradient(45deg, #1a2a6c, #b21f1f);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-block;
+            border: none;
+            margin: 10px;
+        }
+
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(26,42,108,0.2);
+            color: white;
+        }
+
+        .divider {
+            height: 1px;
+            background: #eee;
+            margin: 2rem 0;
+        }
+
+        .footer-text {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <?php if (isset($showThankYou) && $showThankYou): ?>
+            <div class="icon-circle">
+                <i class="fas fa-check"></i>
+            </div>
+            
+            <h1>Thank You!</h1>
+            
+            <div class="message">
+                <p>Thank you for uploading your police verification document. Our team will review it shortly.</p>
+                <p>Your account status has been set to pending while we verify your documents.</p>
+                <p>We will notify you once the verification is complete.</p>
+            </div>
+
+            <div class="divider"></div>
+
+            <p class="footer-text">
+                Best regards,<br>
+                CHARITEX Team
+            </p>
+
+            <div class="mt-4">
+                <a href="index.php" class="btn-custom">
+                    <i class="fas fa-home me-2"></i>Return to Home
+                </a>
+                <a href="volunteer_signup.php" class="btn-custom">
+                    <i class="fas fa-user-plus me-2"></i>Continue to Sign Up
+                </a>
+            </div>
+        <?php else: ?>
+            <form method="POST" enctype="multipart/form-data">
+                <!-- ... your existing form fields ... -->
+            </form>
+        <?php endif; ?>
+    </div>
+</body>
+</html> 

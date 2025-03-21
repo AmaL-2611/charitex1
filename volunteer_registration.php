@@ -76,7 +76,7 @@
         </div>
 
         <div class="text-center mt-4">
-            <p class="text-muted">Need help? Contact our support team at support@example.com</p>
+            <p class="text-muted">Need help? Contact our support team at charitex@gmail.com</p>
         </div>
     </div>
 

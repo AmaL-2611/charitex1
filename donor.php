@@ -27,6 +27,29 @@ try {
     // Log error if database fetch fails
     error_log("Error fetching donor details: " . $e->getMessage());
 }
+
+// Establish database connection
+try {
+    $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME, DB_USER, DB_PASS);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Connection failed: " . $e->getMessage());
+}
+
+// Fetch approved beneficiaries
+try {
+    $stmt = $pdo->prepare("
+        SELECT b.*, o.name as orphanage_name 
+        FROM beneficiaries b 
+        JOIN orphanage o ON b.orphanage_id = o.id 
+        WHERE b.status = 'Approved' 
+        ORDER BY b.reviewed_at DESC
+    ");
+    $stmt->execute();
+    $beneficiaries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    die("Error fetching beneficiaries: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -34,8 +57,18 @@ try {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CHARITEX - Empowering Change Through Giving</title>
+    
+    <!-- Enhanced Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    
+    <!-- Existing CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- AOS Animation Library -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    
     <style>
       /* .profile-section {
     position: fixed;
@@ -187,8 +220,8 @@ try {
         --primary: #ff6b6b;
         --secondary: #4ecdc4;
         --accent: #45b7d1;
-        --background: #f8f9fa;
-        --text: #2c3e50;
+        --dark: #2c3e50;
+        --light: #f8f9fa;
         --success: #2ecc71;
         --warning: #f1c40f;
       }
@@ -197,6 +230,7 @@ try {
         background-color: var(--background);
         color: var(--text);
         line-height: 1.6;
+        font-family: 'Poppins', sans-serif;
       }
 
       .navbar {
@@ -697,10 +731,360 @@ try {
           opacity: 1;
         }
       }
+
+      .card {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-5px);
+      }
+
+      .card-header {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+      }
+
+      .btn-outline-primary {
+        width: 100%;
+        text-align: left;
+      }
+
+      .btn-outline-primary:hover {
+        background-color: #f8f9fa;
+        color: #007bff;
+      }
+
+      .card-footer {
+        background-color: #fff;
+        border-top: none;
+        padding: 1rem;
+      }
+
+      .btn-success {
+        background: linear-gradient(45deg, #28a745, #218838);
+        border: none;
+        padding: 10px;
+      }
+
+      .btn-success:hover {
+        background: linear-gradient(45deg, #218838, #1e7e34);
+        transform: scale(1.02);
+      }
+
+      .modal-header {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+      }
+
+      .table th {
+        color: #6c757d;
+        width: 40%;
+      }
+
+      .badge {
+        font-size: 0.9em;
+        padding: 0.5em 1em;
+      }
+
+      .modal-body h6 {
+        font-weight: 600;
+        margin-bottom: 1rem;
+      }
+
+      .fst-italic {
+        color: #6c757d;
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+      }
+
+      .card {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease;
+        border: none;
+      }
+
+      .card:hover {
+        transform: translateY(-5px);
+      }
+
+      .card-header {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        padding: 1rem;
+      }
+
+      .beneficiary-details p {
+        font-size: 0.95rem;
+        padding: 0.5rem;
+        border-bottom: 1px solid #eee;
+      }
+
+      .beneficiary-details p:last-child {
+        border-bottom: none;
+      }
+
+      .beneficiary-details i {
+        margin-right: 8px;
+        width: 20px;
+      }
+
+      .card-footer {
+        background-color: #fff;
+        border-top: none;
+        padding: 1rem;
+      }
+
+      .btn-success {
+        background: linear-gradient(45deg, #28a745, #218838);
+        border: none;
+        padding: 10px;
+      }
+
+      .btn-success:hover {
+        background: linear-gradient(45deg, #218838, #1e7e34);
+        transform: scale(1.02);
+      }
+
+      .beneficiary-profile-img {
+        height: 200px;
+        object-fit: cover;
+      }
+
+      /* Add this to your existing card styles */
+      .card {
+        overflow: hidden;
+      }
+
+      .card:hover .beneficiary-profile-img {
+        transform: scale(1.05);
+        transition: transform 0.3s ease;
+      }
+
+      /* Add this to create separation between sections */
+      .approved-beneficiaries-section {
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        margin-top: -3rem; /* Adjust this value to reduce gap if needed */
+      }
+
+      /* Enhanced Typography */
+      h1, h2, h3, h4, h5 {
+        font-family: 'Playfair Display', serif;
+        font-weight: 700;
+      }
+
+      /* Enhanced Card Design */
+      .card {
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      }
+
+      .card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.12);
+      }
+
+      .card-img-top {
+        height: 250px;
+        object-fit: cover;
+        transition: all 0.5s ease;
+      }
+
+      .card:hover .card-img-top {
+        transform: scale(1.1);
+      }
+
+      .card-header {
+        background: linear-gradient(135deg, var(--primary), #ff8585);
+        color: white;
+        padding: 1.5rem;
+        border: none;
+      }
+
+      .card-body {
+        padding: 2rem;
+      }
+
+      /* Enhanced Buttons */
+      .btn {
+        padding: 12px 25px;
+        border-radius: 50px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn-success {
+        background: linear-gradient(135deg, var(--success), #27ae60);
+        border: none;
+      }
+
+      .btn-success:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(46, 204, 113, 0.2);
+      }
+
+      .btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(120deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: all 0.5s ease;
+      }
+
+      .btn:hover::before {
+        left: 100%;
+      }
+
+      /* Enhanced Details Section */
+      .beneficiary-details p {
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .beneficiary-details i {
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--light);
+        border-radius: 50%;
+        color: var(--primary);
+      }
+
+      /* Testimonials Section */
+      .testimonials {
+        background: var(--light);
+        padding: 5rem 0;
+      }
+
+      .testimonial-card {
+        background: white;
+        padding: 2rem;
+        border-radius: 15px;
+        margin: 1rem;
+        position: relative;
+      }
+
+      .testimonial-card::before {
+        content: '"';
+        position: absolute;
+        top: -20px;
+        left: 20px;
+        font-size: 5rem;
+        color: var(--primary);
+        opacity: 0.1;
+        font-family: serif;
+      }
+
+      /* Statistics Section */
+      .statistics {
+        padding: 3rem 0;
+        background: linear-gradient(135deg, var(--primary), #ff8585);
+        color: white;
+      }
+
+      .stat-item {
+        text-align: center;
+        padding: 2rem;
+      }
+
+      .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      /* Responsive Design */
+      @media (max-width: 768px) {
+        .section-title h2 {
+          font-size: 2rem;
+        }
+
+        .card-body {
+          padding: 1.5rem;
+        }
+
+        .stat-item {
+          margin-bottom: 2rem;
+        }
+      }
+
+      /* Loading Animation */
+      .loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+      }
+
+      .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      /* Add these styles for the amount section */
+      .amount-section {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+      }
+
+      .amount-section h6 {
+        color: var(--primary);
+        font-weight: 600;
+      }
+
+      .progress {
+        background-color: #e9ecef;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .progress-bar {
+        transition: width 0.3s ease;
+      }
+
+      .badge {
+        padding: 0.5em 1em;
+        font-weight: 500;
+      }
     </style>
   </head>
   <body>
-    <!-- Rest of the HTML content remains the same, just remove inline styles since they're now in the stylesheet -->
+    <!-- Loading Animation -->
+    <div class="loading" id="loadingScreen">
+        <div class="loading-spinner"></div>
+    </div>
+
     <nav class="navbar">
       <div class="nav-content">
         <div class="logo">
@@ -765,19 +1149,7 @@ try {
       </div>
     </section>
 
-    <!-- Causes Section with updated content structure -->
-    <section class="causes-section section-padding">
-        <div class="container-fluid">
-            <div class="row">
-                <div class="col-12">
-                    <div class="section-title-wrap mb-5">
-                        <h2 class="section-title">Active Causes</h2>
-                        <div class="section-sub-title">
-                            <p>Support our ongoing fundraising campaigns</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
 
             <div class="causes-scroll">
                 <?php
@@ -786,8 +1158,7 @@ try {
                     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
                     // Get active causes with their donation totals
-                    $stmt = $pdo->query("
-                        SELECT 
+                    $stmt = $pdo->query(" SELECT 
                             c.*,
                             COALESCE(SUM(d.amount), 0) as total_donations,
                             COUNT(DISTINCT d.donor_id) as donor_count
@@ -856,7 +1227,7 @@ try {
         <div class="container">
             <div class="row mb-4">
                 <div class="col-12">
-                    <h2 class="text-center">Orphanage Funding Requests</h2>
+                    <h2 class="text-center">Active Causes</h2>
                     <p class="text-center">Support our orphanages by contributing to their specific needs</p>
                 </div>
             </div>
@@ -936,7 +1307,108 @@ try {
             </div>
         </div>
     </section>
-    <section class="signup-section">
+    <section class="approved-beneficiaries-section py-5 bg-light">
+        <div class="container">
+            <div class="section-title text-center mb-5">
+                <h2>Approved Beneficiaries</h2>
+                <p>Support children in need of educational and medical assistance</p>
+            </div>
+
+            <div class="row">
+                <?php if (empty($beneficiaries)): ?>
+                    <div class="col-12 text-center">
+                        <p class="alert alert-info">No approved beneficiaries available at the moment.</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($beneficiaries as $beneficiary): ?>
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100">
+                                <?php if ($beneficiary['profile_image']): ?>
+                                    <img src="<?php echo htmlspecialchars($beneficiary['profile_image']); ?>" 
+                                         class="card-img-top beneficiary-profile-img" 
+                                         alt="Child's Photo">
+                                <?php endif; ?>
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="card-title mb-0">
+                                        <?php echo htmlspecialchars($beneficiary['support_type']); ?> Support Request
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="beneficiary-details">
+                                        <div class="amount-section mb-3">
+                                            <h6 class="text-primary mb-2">Required Amount</h6>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="h4 mb-0">₹<?php echo number_format($beneficiary['required_amount'], 2); ?></span>
+                                                <span class="badge bg-primary">Goal</span>
+                                            </div>
+                                            
+                                            <div class="progress mt-2" style="height: 10px;">
+                                                <div class="progress-bar bg-success" 
+                                                     role="progressbar" 
+                                                     style="width: <?php echo ($beneficiary['collected_amount'] ?? 0) / $beneficiary['required_amount'] * 100; ?>%" 
+                                                     aria-valuenow="<?php echo ($beneficiary['collected_amount'] ?? 0) / $beneficiary['required_amount'] * 100; ?>" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                </div>
+                                            </div>
+                                            
+                                            <?php if (isset($beneficiary['collected_amount'])): ?>
+                                            <small class="text-muted">
+                                                Raised: ₹<?php echo number_format($beneficiary['collected_amount'], 2); ?>
+                                            </small>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <p class="mb-2">
+                                            <i class="fas fa-home text-primary"></i>
+                                            <strong>Orphanage:</strong> 
+                                            <?php echo htmlspecialchars($beneficiary['orphanage_name']); ?>
+                                        </p>
+                                        
+                                        <p class="mb-2">
+                                            <i class="fas fa-calendar text-primary"></i>
+                                            <strong>Date of Birth:</strong> 
+                                            <?php echo date('d M Y', strtotime($beneficiary['date_of_birth'])); ?>
+                                        </p>
+                                        
+                                        <p class="mb-2">
+                                            <i class="fas fa-user-circle text-primary"></i>
+                                            <strong>Age:</strong> 
+                                            <?php 
+                                                $dob = new DateTime($beneficiary['date_of_birth']);
+                                                $now = new DateTime();
+                                                $age = $now->diff($dob)->y;
+                                                echo $age; 
+                                            ?> years
+                                        </p>
+                                        
+                                        <p class="mb-2">
+                                            <i class="fas fa-venus-mars text-primary"></i>
+                                            <strong>Gender:</strong> 
+                                            <?php echo htmlspecialchars($beneficiary['gender']); ?>
+                                        </p>
+                                        
+                                        <p class="mb-2">
+                                            <i class="fas fa-graduation-cap text-primary"></i>
+                                            <strong>Support Type:</strong> 
+                                            <?php echo htmlspecialchars($beneficiary['support_type']); ?>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="card-footer">
+                                    <button class="btn btn-success w-100" 
+                                            onclick="location.href='donate.php?beneficiary_id=<?php echo $beneficiary['id']; ?>'">
+                                        <i class="fas fa-hand-holding-heart"></i> Support This Child
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </section>
+    <!-- <section class="signup-section">
       <div class="signup-container">
           <div class="signup-grid">
               <div class="signup-content">
@@ -959,22 +1431,10 @@ try {
                   </p>
               </div>
           </div>
-      </div>
+      </div> -->
       
   </section>
-  <footer class="footer">
-    <div class="footer-content">
-      <h2 class="footer-title">Stay Updated</h2>
-      <p class="footer-description">Subscribe to our newsletter for updates on causes and impact stories</p>
-      <form class="newsletter-form" onsubmit="event.preventDefault();">
-        <input 
-          type="email" 
-          class="newsletter-input" 
-          placeholder="Enter your email address"
-          required
-        >
-        <button type="submit" class="btn-subscribe">Subscribe</button>
-      </form>
+  
     </div>
   </footer>
   </body>
@@ -1053,4 +1513,116 @@ function showDonationModal(causeId, title, goalAmount) {
         </div>
     </div>
 </div>
+
+<!-- Statistics Section -->
+
+<!-- Testimonials Section -->
+<section class="testimonials">
+    <div class="container">
+        <div class="section-title" data-aos="fade-up">
+            <h2>What Our Donors Say</h2>
+            <p>Real stories from our generous supporters</p>
+        </div>
+        <div class="row">
+            <div class="col-md-4" data-aos="fade-up">
+                <div class="testimonial-card">
+                    <p>"Making a difference in children's lives through this platform has been incredibly rewarding."</p>
+                    <div class="testimonial-author">
+                        <strong>Rahul Sharma</strong>
+                        <div>Regular Donor</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Add more testimonials -->
+        </div>
+    </div>
+</section>
+<section class="statistics">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-3 col-6">
+                <div class="stat-item" data-aos="fade-up">
+                    <div class="stat-number">500+</div>
+                    <div class="stat-label">Children Supported</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-item" data-aos="fade-up" data-aos-delay="100">
+                    <div class="stat-number">₹10M+</div>
+                    <div class="stat-label">Funds Raised</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-item" data-aos="fade-up" data-aos-delay="200">
+                    <div class="stat-number">50+</div>
+                    <div class="stat-label">Partner Orphanages</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-item" data-aos="fade-up" data-aos-delay="300">
+                    <div class="stat-number">1000+</div>
+                    <div class="stat-label">Active Donors</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- Enhanced Footer -->
+<footer class="footer bg-dark text-white py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4">
+                <h5>About CHARITEX</h5>
+                <p>Empowering change through giving and making a difference in children's lives.</p>
+                <div class="social-links">
+                    <a href="#" class="text-white me-3"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" class="text-white me-3"><i class="fab fa-twitter"></i></a>
+                    <a href="#" class="text-white me-3"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="text-white"><i class="fab fa-linkedin-in"></i></a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <h5>Quick Links</h5>
+                <ul class="list-unstyled">
+                    <li><a href="#" class="text-white">About Us</a></li>
+                    <li><a href="#" class="text-white">How It Works</a></li>
+                    <li><a href="#" class="text-white">Contact Us</a></li>
+                    <li><a href="#" class="text-white">Privacy Policy</a></li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <h5>Newsletter</h5>
+                <p>Stay updated with our latest news and updates.</p>
+                <form class="newsletter-form">
+                    <div class="input-group">
+                        <input type="email" class="form-control" placeholder="Your email">
+                        <button class="btn btn-primary">Subscribe</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+    // Initialize AOS
+    AOS.init({
+        duration: 1000,
+        once: true
+    });
+
+    // Loading Screen
+    window.addEventListener('load', function() {
+        document.getElementById('loadingScreen').style.display = 'none';
+    });
+
+    // Success Toast
+    function showSuccessToast(message) {
+        // Implementation of success toast
+    }
+</script>
 </html>
