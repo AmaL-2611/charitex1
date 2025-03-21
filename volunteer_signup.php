@@ -19,7 +19,7 @@ if (isset($_POST['check_volunteer_code'])) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     // Debug point 1: Check if form is being submitted
     error_log("Form submitted");
     
@@ -35,7 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirm_password = $_POST['confirm_password'] ?? '';
     $location = trim($_POST['location'] ?? '');
     $availability = $_POST['availability'] ?? '';
-    $volunteer_code = trim($_POST['volunteer_code'] ?? '');
     
     // Debug point 3: Check sanitized variables
     error_log("Sanitized data: " . print_r([
@@ -89,137 +88,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Add validation for volunteer code
-    if (empty($volunteer_code)) {
-        $signup_errors[] = "Volunteer ID is required";
-    } else {
-        try {
-            // First check if code exists in volunteer_verifications
-            $check_code_stmt = $pdo->prepare("SELECT verification_code FROM volunteer_verifications WHERE verification_code = ?");
-            $check_code_stmt->execute([$volunteer_code]);
-            $code_data = $check_code_stmt->fetch();
-
-            if (!$code_data) {
-                $signup_errors[] = "Wrong Volunteer ID";
-                error_log("Wrong Volunteer ID attempted: " . $volunteer_code);
-            } else {
-                // If code exists, check if it's already used in volunteers table
-                $check_used_stmt = $pdo->prepare("SELECT volunteer_id FROM volunteers WHERE volunteer_id = ?");
-                $check_used_stmt->execute([$volunteer_code]);
-                
-                if ($check_used_stmt->fetch()) {
-                    $signup_errors[] = "This Volunteer ID is already registered";
-                    error_log("Already used Volunteer ID attempted: " . $volunteer_code);
-                }
-            }
-        } catch (PDOException $e) {
-            error_log("Code verification error: " . $e->getMessage());
-            $signup_errors[] = "Error verifying Volunteer ID";
-        }
-    }
-
-    // If no errors, create account
     if (empty($signup_errors)) {
         try {
             // Debug point 1: Before file upload
             error_log("Starting file upload process");
 
-            // Handle file upload
-            $upload_dir = 'uploads/aadhar/';
-            if (!file_exists($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
+            // Handle file uploads
+            $aadhar_upload_dir = 'uploads/aadhar/';
+            $police_upload_dir = 'uploads/police_doc/';
+            
+            // Create directories if they don't exist
+            if (!file_exists($aadhar_upload_dir)) {
+                mkdir($aadhar_upload_dir, 0777, true);
+            }
+            if (!file_exists($police_upload_dir)) {
+                mkdir($police_upload_dir, 0777, true);
             }
 
-            $file_extension = strtolower(pathinfo($_FILES['aadhar']['name'], PATHINFO_EXTENSION));
-            $new_filename = uniqid() . '.' . $file_extension;
-            $target_file = $upload_dir . $new_filename;
-
-            if (!move_uploaded_file($_FILES['aadhar']['tmp_name'], $target_file)) {
-                throw new Exception("Failed to upload Aadhar document");
-            }
-
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            // Process file uploads and database insertion
+            $aadhar_file = $_FILES['aadhar'];
+            $police_file = $_FILES['police_doc'];
             
-            // Debug point 2: Check all values before insert
-            error_log("Values to be inserted: " . print_r([
-                'name' => $name,
-                'email' => $email,
-                'mobile' => $mobile,
-                'location' => $location,
-                'availability' => $availability,
-                'aadhar_file' => $target_file,
-                'volunteer_id' => $volunteer_code
-            ], true));
-
-            // Modify column name from aadhar_file to match your database
-            $sql = "INSERT INTO volunteers (
-                name, 
-                email, 
-                mobile, 
-                password, 
-                location, 
-                availability, 
-                aadhar_file,  /* Make sure this column name matches your database */
-                role, 
-                status,
-                volunteer_id
-            ) VALUES (
-                :name, 
-                :email, 
-                :mobile, 
-                :password, 
-                :location, 
-                :availability, 
-                :aadhar_file, 
-                'volunteer', 
-                'pending',
-                :volunteer_id
-            )";
+            // Generate unique filenames
+            $aadhar_filename = uniqid() . '_' . basename($aadhar_file['name']);
+            $police_filename = uniqid() . '_' . basename($police_file['name']);
             
-            $stmt = $pdo->prepare($sql);
-            
-            // Use named parameters
-            $params = [
-                ':name' => $name,
-                ':email' => $email,
-                ':mobile' => $mobile,
-                ':password' => $hashed_password,
-                ':location' => $location,
-                ':availability' => $availability,
-                ':aadhar_file' => $target_file,
-                ':volunteer_id' => $volunteer_code
-            ];
+            $aadhar_target_file = $aadhar_upload_dir . $aadhar_filename;
+            $police_target_file = $police_upload_dir . $police_filename;
 
-            // Debug point 3: Log SQL and parameters
-            error_log("SQL Query: " . $sql);
-            error_log("Parameters: " . print_r($params, true));
+            if (move_uploaded_file($aadhar_file['tmp_name'], $aadhar_target_file) &&
+                move_uploaded_file($police_file['tmp_name'], $police_target_file)) {
+                
+                // Insert into volunteer_applications table
+                $sql = "INSERT INTO volunteer_applications (
+                    name, email, mobile, password, location, 
+                    availability, aadhar_file, police_doc
+                ) VALUES (
+                    :name, :email, :mobile, :password, :location,
+                    :availability, :aadhar_file, :police_doc
+                )";
 
-            $result = $stmt->execute($params);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([
+                    ':name' => $name,
+                    ':email' => $email,
+                    ':mobile' => $mobile,
+                    ':password' => password_hash($password, PASSWORD_DEFAULT),
+                    ':location' => $location,
+                    ':availability' => $availability,
+                    ':aadhar_file' => $aadhar_target_file,
+                    ':police_doc' => $police_target_file
+                ]);
 
-            // Debug point 4: Check for errors
-            if (!$result) {
-                error_log("Database Error: " . print_r($stmt->errorInfo(), true));
-                error_log("SQL Error: " . print_r($stmt->errorInfo(), true));
-                error_log("SQL State: " . $stmt->errorCode());
-                throw new Exception("Failed to create account: " . $stmt->errorInfo()[2]);
-            }
-
-            // If successful, update verification code status
-            if ($result) {
-                try {
-                    
-                    header("Location: login.php");
-                    exit(); // Make sure to exit after redirect
-                } catch (Exception $e) {
-                    error_log("Redirect error: " . $e->getMessage());
-                }
+                $_SESSION['signup_success'] = true;
             } else {
-                error_log("Database insertion failed");
-                $signup_errors[] = "Failed to create account";
+                $signup_errors[] = "Error uploading files.";
             }
-        } catch (Exception $e) {
+        } catch (PDOException $e) {
             error_log("Error in signup process: " . $e->getMessage());
-            $signup_errors[] = "Failed to create account: " . $e->getMessage();
+            $signup_errors[] = "Failed to submit application. Please try again.";
         }
     } else {
         // Debug point 9: Check validation errors
@@ -498,90 +425,226 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .form-group.error .input-icon i {
             color: #ff4444;
         }
+
+        .success-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .success-message {
+            background-color: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+        }
+
+        .success-icon {
+            color: #4CAF50;
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .success-message h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .success-message p {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .next-steps {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .next-steps ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .next-steps li {
+            margin: 8px 0;
+            color: #555;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .action-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 30px;
+            border-radius: 25px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .action-button i {
+            margin-right: 8px;
+        }
+
+        .login-button {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        .login-button:hover {
+            background-color: #1976D2;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .home-button {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .home-button:hover {
+            background-color: #45a049;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 480px) {
+            .button-group {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .action-button {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Join as a Volunteer</h1>
-            <p>Offer your time and skills</p>
-        </div>
-
-        <?php if (!empty($signup_errors)): ?>
-            <div class="error-message" style="display: block; color: #ff4444; text-align: center; margin-bottom: 15px;">
-                <?php foreach ($signup_errors as $error): ?>
-                    <?php echo htmlspecialchars($error); ?><br>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-
-        <form id="signupForm" action="<?php echo $_SERVER['PHP_SELF']; ?>" method="POST" enctype="multipart/form-data">
-            <div class="form-group">
-                <div class="input-icon">
-                    <i class="fas fa-id-card"></i>
-                    <input type="text" 
-                           id="volunteer_code" 
-                           name="volunteer_code" 
-                           placeholder="Enter Volunteer ID received in email" 
-                           required />
+    <?php if (isset($_SESSION['signup_success'])): ?>
+        <div class="success-overlay">
+            <div class="success-message">
+                <i class="fas fa-check-circle success-icon"></i>
+                <h2>Application Submitted Successfully!</h2>
+                <p>Thank you for your interest in joining our volunteer team.</p>
+                <p>Our team will carefully review your application and documents.</p>
+                <p>You will receive an email notification about your application status.</p>
+                <div class="next-steps">
+                    <p><strong>What's Next?</strong></p>
+                    <ul>
+                        <li>Our team will review your submitted documents</li>
+                        <li>You'll receive an email with the decision</li>
+                        <li>If approved, you can login using your credentials</li>
+                    </ul>
                 </div>
-                <div class="error-message" id="volunteer-code-error"></div>
+                <div class="button-group">
+                    <a href="login.php" class="action-button login-button">
+                        <i class="fas fa-sign-in-alt"></i> Go to Login
+                    </a>
+                    <a href="main.php" class="action-button home-button">
+                        <i class="fas fa-home"></i> Back to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+        <?php unset($_SESSION['signup_success']); ?>
+    <?php else: ?>
+        <div class="container">
+            <div class="header">
+                <h1>Join as a Volunteer</h1>
+                <p>Offer your time and skills</p>
             </div>
 
-            <div class="form-group">
-                <input type="text" id="name" name="name" placeholder="Full name (at least 2 words)" required />
-                <div class="error-message" id="name-error"></div>
-            </div>
+            <?php if (!empty($signup_errors)): ?>
+                <div class="error-message" style="display: block; color: #ff4444; text-align: center; margin-bottom: 15px;">
+                    <?php foreach ($signup_errors as $error): ?>
+                        <?php echo htmlspecialchars($error); ?><br>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
 
-            <div class="form-group">
-                <input type="email" id="email" name="email" placeholder="Enter a valid email address" required />
-                <div class="error-message" id="email-error"></div>
-            </div>
+            <form id="signupForm" action="<?php echo $_SERVER['PHP_SELF']; ?>" method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                    <input type="text" id="name" name="name" placeholder="Full name (at least 2 words)" required />
+                    <div class="error-message" id="name-error"></div>
+                </div>
 
-            <div class="form-group">
-                <input type="tel" id="mobile" name="mobile" placeholder="Enter 10-digit mobile number" pattern="[0-9]{10}" required />
-                <div class="error-message" id="mobile-error"></div>
-            </div>
+                <div class="form-group">
+                    <input type="email" id="email" name="email" placeholder="Enter a valid email address" required />
+                    <div class="error-message" id="email-error"></div>
+                </div>
 
-            <div class="form-group">
-                <input type="password" id="password" name="password" placeholder="Password (min 8 chars, 1 uppercase, 1 number)" required />
-                <div class="error-message" id="password-error"></div>
-            </div>
+                <div class="form-group">
+                    <input type="tel" id="mobile" name="mobile" placeholder="Enter 10-digit mobile number" pattern="[0-9]{10}" required />
+                    <div class="error-message" id="mobile-error"></div>
+                </div>
 
-            <div class="form-group">
-                <input type="password" id="confirm_password" name="confirm_password" placeholder="Re-enter your password" required />
-                <div class="error-message" id="confirm-password-error"></div>
-            </div>
+                <div class="form-group">
+                    <input type="password" id="password" name="password" placeholder="Password (min 8 chars, 1 uppercase, 1 number)" required />
+                    <div class="error-message" id="password-error"></div>
+                </div>
 
-            <div class="form-group">
-                <input type="text" id="location" name="location" placeholder="Enter your city or region" required />
-                <div class="error-message" id="location-error"></div>
-            </div>
+                <div class="form-group">
+                    <input type="password" id="confirm_password" name="confirm_password" placeholder="Re-enter your password" required />
+                    <div class="error-message" id="confirm-password-error"></div>
+                </div>
 
-            <div class="form-group">
-                <select id="availability" name="availability" class="custom-select" required>
-                    <option value="" disabled selected>Select your availability</option>
-                    <option value="weekdays">Weekdays</option>
-                    <option value="weekends">Weekends</option>
-                    <option value="flexible">Flexible</option>
-                </select>
-                <div class="error-message" id="availability-error"></div>
-            </div>
+                <div class="form-group">
+                    <input type="text" id="location" name="location" placeholder="Enter your city or region" required />
+                    <div class="error-message" id="location-error"></div>
+                </div>
 
-            <div class="form-group">
-                <label for="aadhar">Upload Aadhar Document</label>
-                <input type="file" id="aadhar" name="aadhar" accept="application/pdf,image/*" required />
-                <div class="error-message" id="aadhar-error"></div>
-            </div>
+                <div class="form-group">
+                    <select id="availability" name="availability" class="custom-select" required>
+                        <option value="" disabled selected>Select your availability</option>
+                        <option value="weekdays">Weekdays</option>
+                        <option value="weekends">Weekends</option>
+                        <option value="flexible">Flexible</option>
+                    </select>
+                    <div class="error-message" id="availability-error"></div>
+                </div>
 
-            <div class="form-bottom">
-                <button type="submit" name="submit" class="form-btn">Create Volunteer Account</button>
-                <p class="login-text">Already have an account? <a href="login.php">Login now</a></p>
-            </div>
-        </form>
-    </div>
+                <div class="form-group">
+                    <label for="aadhar">Upload Aadhar Document</label>
+                    <input type="file" id="aadhar" name="aadhar" accept="application/pdf,image/*" required />
+                    <div class="error-message" id="aadhar-error"></div>
+                </div>
 
-    <!-- Copy all JavaScript validation code from signup.php -->
+                <div class="form-group">
+                    <label for="police_doc">Upload Police Verification Document</label>
+                    <input type="file" id="police_doc" name="police_doc" accept="application/pdf,image/*" required />
+                    <div class="error-message" id="police-doc-error"></div>
+                </div>
+
+                <div class="form-bottom">
+                    <button type="submit" name="submit" class="form-btn">Create Volunteer Account</button>
+                    <p class="login-text">Already have an account? <a href="login.php">Login now</a></p>
+                </div>
+            </form>
+        </div>
+    <?php endif; ?>
+
     <script>
         function validateFullName(input) {
             const value = input.value.trim();
@@ -726,12 +789,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return true;
         }
 
-        function validateVolunteerCode(input) {
-            const value = input.value.trim();
-            if (!value) {
-                showValidation(input, "Volunteer ID is required");
+        function validatePoliceDoc(input) {
+            const file = input.files[0];
+            if (!file) {
+                input.classList.add("error");
+                input.classList.remove("valid");
+                showValidation(input, "Please select a Police Verification document");
                 return false;
             }
+
+            const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+            if (!validTypes.includes(file.type)) {
+                input.classList.add("error");
+                input.classList.remove("valid");
+                showValidation(input, "Please upload a valid image or PDF file");
+                return false;
+            }
+
+            input.classList.remove("error");
+            input.classList.add("valid");
+            hideValidation(input);
             return true;
         }
 
@@ -758,7 +835,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!validatePassword(document.getElementById('password'))) isValid = false;
             if (!validateConfirmPassword(document.getElementById('confirm_password'))) isValid = false;
             if (!validateAadhar(document.getElementById('aadhar'))) isValid = false;
-            if (!validateVolunteerCode(document.getElementById('volunteer_code'))) isValid = false;
+            if (!validatePoliceDoc(document.getElementById('police_doc'))) isValid = false;
 
             // Additional validation for volunteer form
             if (document.getElementById('location')) {
@@ -810,8 +887,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             validateAadhar(this);
         });
 
-        document.getElementById('volunteer_code').addEventListener('input', function() {
-            validateVolunteerCode(this);
+        document.getElementById('police_doc').addEventListener('change', function() {
+            validatePoliceDoc(this);
         });
 
         // Additional event listeners for volunteer form
@@ -843,36 +920,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             element.addEventListener('blur', function() {
                 this.classList.remove('input-focus');
-            });
-        });
-
-        // Add this with your other JavaScript validation code
-        document.getElementById('volunteer_code').addEventListener('input', function() {
-            const code = this.value.trim();
-            
-            if (!code) {
-                showValidation(this, "Volunteer ID is required");
-                return;
-            }
-
-            // Check if volunteer ID already exists
-            fetch('volunteer_signup.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'check_volunteer_code=' + encodeURIComponent(code)
-            })
-            .then(response => response.text())
-            .then(data => {
-                if (data === 'exists') {
-                    showValidation(this, "Wrong Volunteer ID");
-                } else {
-                    hideValidation(this);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
             });
         });
     </script>

@@ -159,6 +159,61 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
         exit;
     }
 }
+
+// Handle approval/rejection actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_POST['volunteer_id'])) {
+    try {
+        $volunteer_id = $_POST['volunteer_id'];
+        $action = $_POST['action'];
+        $status = ($action === 'approve') ? 'approved' : 'rejected';
+        
+        $stmt = $pdo->prepare("UPDATE volunteers SET status = ? WHERE id = ?");
+        $stmt->execute([$status, $volunteer_id]);
+
+        // Send email notification to volunteer
+        $email_stmt = $pdo->prepare("SELECT email, name FROM volunteers WHERE id = ?");
+        $email_stmt->execute([$volunteer_id]);
+        $volunteer = $email_stmt->fetch();
+
+        if ($volunteer) {
+            $to = $volunteer['email'];
+            $subject = "Volunteer Application " . ucfirst($status);
+            $message = "Dear " . $volunteer['name'] . ",\n\n";
+            $message .= "Your volunteer application has been " . $status . ".\n";
+            if ($status === 'approved') {
+                $message .= "You can now login to your account and start volunteering.\n";
+            } else {
+                $message .= "Unfortunately, we cannot accept your application at this time.\n";
+            }
+            $message .= "\nBest regards,\nCharitex Team";
+            
+            mail($to, $subject, $message);
+        }
+
+        $_SESSION['message'] = "Volunteer successfully " . $status;
+    } catch (PDOException $e) {
+        error_log("Error updating volunteer status: " . $e->getMessage());
+        $_SESSION['error'] = "Error updating volunteer status";
+    }
+    
+    header('Location: admin_dashboard.php');
+    exit();
+}
+
+// Fetch pending volunteer applications
+try {
+    $stmt = $pdo->prepare("
+        SELECT id, name, email, mobile, location, availability, aadhar_file, police_doc, created_at, status 
+        FROM volunteers 
+        WHERE status = 'pending'
+        ORDER BY created_at DESC
+    ");
+    $stmt->execute();
+    $pending_volunteers = $stmt->fetchAll();
+} catch (PDOException $e) {
+    error_log("Error fetching pending volunteers: " . $e->getMessage());
+    $pending_volunteers = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -224,6 +279,14 @@ if (isset($_POST['action']) && isset($_POST['request_id'])) {
                     <li class="nav-item">
                         <a class="nav-link active" href="admin_dashboard.php">
                             <i class="fas fa-home"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="volunteer_requests.php">
+                            <i class="fas fa-user-clock"></i> Volunteer Requests
+                            <?php if($pendingVolunteers > 0): ?>
+                                <span class="badge bg-danger"><?php echo $pendingVolunteers; ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
                     <li class="nav-item">
