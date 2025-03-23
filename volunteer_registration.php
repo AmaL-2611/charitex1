@@ -90,7 +90,7 @@
             <div class="step">
                 <div class="step-number">Step 1: Download Police Verification Form</div>
                 <p>Download and print the police verification form using the button below.</p>
-                <a href="assets/police_verification_form.pdf" class="download-btn" download>
+                <a href="verification/verification-form.docx" class="download-btn" download>
                     <i class="fas fa-download"></i> Download Form
                 </a>
             </div>

@@ -572,11 +572,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <small class="text-muted">Upload surgery recommendation letter</small>
                                 </div>
 
-                                <div class="mb-3">
+                                <!-- <div class="mb-3">
                                     <label for="insurance_letter" class="form-label">Medical Insurance Claim Letter</label>
                                     <input type="file" class="form-control" id="insurance_letter" name="insurance_letter" accept=".pdf,.jpg,.jpeg,.png">
                                     <small class="text-muted">If applicable, upload insurance claim details</small>
-                                </div>
+                                </div> -->
                             </div>
 
                             <div class="mb-3">
