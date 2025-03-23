@@ -13,7 +13,11 @@ $_SESSION = array();
 // Destroy the session cookie
 if (isset($_COOKIE[session_name()]))
  {
+<<<<<<< HEAD
     setcookie(session_name());
+=======
+    setcookie(session_name(), '', time()-3600, '/');
+>>>>>>> master
 }
 
 // Destroy the session

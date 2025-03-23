@@ -10,7 +10,14 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_type']) || $_SESSION[
 
 // Get volunteer details
 try {
+<<<<<<< HEAD
     if (!isset($pdo)) {
+=======
+    // Use the database connection function from connect.php
+    $pdo = getDatabaseConnection();
+    
+    if (!$pdo) {
+>>>>>>> master
         throw new Exception("Could not establish database connection.");
     }
 
@@ -37,6 +44,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <title>Volunteer Dashboard - CHARITEX</title>
+<<<<<<< HEAD
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .dashboard-header {
@@ -61,10 +69,43 @@ try {
         }
         .btn-unregister:hover {
             background-color: #c82333;
+=======
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .dashboard-header {
+            background-color: #007bff;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+        }
+        .event-card {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success-message {
+            background-color: #28a745;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 15px;
+>>>>>>> master
         }
     </style>
 </head>
 <body>
+<<<<<<< HEAD
     <div class="container mt-4">
         <div class="dashboard-header">
             <h2>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Volunteer'); ?>!</h2>
@@ -109,5 +150,40 @@ try {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+=======
+    <div class="dashboard-header">
+        <h1>Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Volunteer'); ?></h1>
+    </div>
+
+    <?php if (isset($_GET['success'])): ?>
+        <div class="success-message">
+            Event registration successful!
+        </div>
+    <?php endif; ?>
+
+    <h2>Your Registered Events</h2>
+
+    <?php if (!empty($registered_events)): ?>
+        <?php foreach ($registered_events as $event): ?>
+            <div class="event-card">
+                <h3><?php echo htmlspecialchars($event['title'] ?? 'Unnamed Event'); ?></h3>
+                <p><strong>Date:</strong> <?php echo date('F j, Y', strtotime($event['event_date'])); ?></p>
+                <p><strong>Location:</strong> <?php echo htmlspecialchars($event['location'] ?? 'N/A'); ?></p>
+                <p><strong>Description:</strong> <?php echo htmlspecialchars($event['description'] ?? 'No description'); ?></p>
+            </div>
+        <?php endforeach; ?>
+    <?php else: ?>
+        <p>You have not registered for any upcoming events.</p>
+    <?php endif; ?>
+
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="event_registration.php" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Register for More Events
+        </a>
+        <a href="logout.php" style="background-color: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">
+            Logout
+        </a>
+    </div>
+>>>>>>> master
 </body>
 </html>

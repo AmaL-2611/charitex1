@@ -138,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['event_id'])) {
         if (!$event) {
             $errors[] = "Event is not available for registration.";
         } else {
+<<<<<<< HEAD
             // Determine max volunteers column dynamically
             $max_volunteer_column = 'max_volunteers';
             
@@ -169,6 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['event_id'])) {
             ");
             $update_result = $update_event_stmt->execute([$event_id]);
 
+=======
+>>>>>>> master
             // Check if already registered
             $check_reg_stmt = $pdo->prepare("
                 SELECT * FROM event_registrations 
@@ -188,6 +191,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['event_id'])) {
                 ");
                 $reg_stmt->execute([$event_id, $volunteer_id]);
 
+<<<<<<< HEAD
+=======
+                // Update event's volunteer count
+                $update_queries = [];
+                if ($volunteer_column) {
+                    $update_queries[] = "UPDATE events SET $volunteer_column = $volunteer_column + 1 WHERE id = ?";
+                }
+                if ($availability_column) {
+                    $update_queries[] = "UPDATE events SET $availability_column = $availability_column - 1 WHERE id = ?";
+                }
+
+                foreach ($update_queries as $update_query) {
+                    $update_stmt = $pdo->prepare($update_query);
+                    $update_stmt->execute([$event_id]);
+                }
+
+>>>>>>> master
                 // Redirect based on user type
                 if (isset($_SESSION['user_type'])) {
                     switch ($_SESSION['user_type']) {

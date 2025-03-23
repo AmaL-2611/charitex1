@@ -3,6 +3,14 @@ session_start();
 require_once 'connect.php';
 require_once 'config.php';
 
+<<<<<<< HEAD
+=======
+// Ensure only volunteers can access
+if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'volunteer') {
+    header("Location: login.php");
+    exit();
+}
+>>>>>>> master
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $event_id = $_POST['event_id'] ?? null;

@@ -3,10 +3,17 @@ session_start();
 require_once 'connect.php';
 
 // Ensure only volunteers can access
+<<<<<<< HEAD
 // if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'volunteer') {
 //     header("Location: login.php");
 //     exit();
 // }
+=======
+if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'volunteer') {
+    header("Location: login.php");
+    exit();
+}
+>>>>>>> master
 
 $volunteer_id = $_SESSION['user_id'];
 $certificates = [];
