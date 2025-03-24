@@ -1,0 +1,18 @@
+# Dependencies
+/vendor/
+/node_modules/
+
+# Environment files
+.env
+config.php
+
+# IDE files
+.vscode/
+.idea/
+
+# Uploaded files
+/uploads/
+*.log
+
+# Cache files
+*.cache 
